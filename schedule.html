@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스케줄 신청</title>
+  <style>
+    * {
+      margin: 0; padding: 0;
+      box-sizing: border-box;
+      font-family: 'Noto Sans KR', sans-serif;
+      color: #000000;
+    }
+
+    body {
+      background-color: #f5f6f7;
+    }
+
+    header {
+      background-color: #ccd3ff;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 22px;
+    }
+
+    nav a {
+      color: #000000;
+      margin-left: 15px;
+      text-decoration: none;
+      font-size: 15px;
+    }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      padding: 30px 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .section h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      border-left: 4px solid #ccd3ff;
+      padding-left: 10px;
+    }
+
+    #calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    #calendar-header button {
+      background-color: #ccd3ff;
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #monthYear {
+      font-size: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      width: 14.28%;
+      height: 100px;
+      vertical-align: top;
+      padding: 5px;
+      position: relative;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    th {
+      background-color: #e5eaff;
+    }
+
+    td.today {
+      background-color: #fffbe7;
+    }
+
+    .selection {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 16px;
+      background-color: #ccd3ff;
+      color: #000000;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    /* 모달 */
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.3);
+      z-index: 50;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -20%);
+      background: #fff;
+      padding: 20px;
+      border: 1px solid #aaa;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 100;
+      width: 300px;
+    }
+
+    .modal h3 {
+      margin-bottom: 15px;
+    }
+
+    .session-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .session-row button {
+      width: 40px;
+      padding: 4px;
+      cursor: pointer;
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+
+    .session-row button.active {
+      background-color: #ccd3ff;
+      color: black;
+      border-color: #ccd3ff;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      color: #000000;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body onload="init()">
+
+  <!-- 상단 네비게이션 -->
+  <header>
+    <h1>스케줄 신청</h1>
+    <nav>
+      <a href="home.html">홈</a>
+      <a href="mypage.html">마이페이지</a>
+      <a href="notices.html">공지사항</a>
+      <a href="calendar.html">달력</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="section">
+      <div id="calendar-header">
+        <button onclick="prevMonth()">◀ 이전달</button>
+        <h2 id="monthYear"></h2>
+        <button onclick="nextMonth()">다음달 ▶</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th>
+          </tr>
+        </thead>
+        <tbody id="calendar-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="modal" id="sessionModal">
+    <h3>스케줄 신청: <span id="modalDate"></span></h3>
+    <div id="sessionList"></div>
+    <button class="btn" onclick="saveSessions()">저장</button>
+    <button class="btn" onclick="closeModal()">닫기</button>
+  </div>
+
+  <div class="footer">
+    © 한양대학교사범대학부속고등학교
+  </div>
+
+  <script>
+    function getCurrentUser() {
+      return JSON.parse(localStorage.getItem('loggedInUser'));
+    }
+
+    let scheduleData = {};
+    let selectedDate = null;
+    const today = new Date();
+    let currentYear, currentMonth;
+
+    function init() {
+      const user = getCurrentUser();
+      if (!user) {
+        alert("로그인이 필요합니다.");
+        location.href = 'index.html';
+        return;
+      }
+
+      scheduleData = JSON.parse(localStorage.getItem(`schedule_${user.id}`) || '{}');
+      currentYear = today.getFullYear();
+      currentMonth = today.getMonth();
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const body = document.getElementById('calendar-body');
+      const header = document.getElementById('monthYear');
+      body.innerHTML = '';
+      header.textContent = `${currentYear}년 ${currentMonth + 1}월`;
+
+      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+      const lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+      let row = document.createElement('tr');
+      for (let i = 0; i < firstDay; i++) row.appendChild(document.createElement('td'));
+
+      for (let d = 1; d <= lastDate; d++) {
+        if ((firstDay + d - 1) % 7 === 0 && d !== 1) {
+          body.appendChild(row);
+          row = document.createElement('tr');
+        }
+
+        const td = document.createElement('td');
+        td.textContent = d;
+        const dateKey = `${currentYear}-${currentMonth + 1}-${d}`;
+
+        if (currentYear === today.getFullYear() && currentMonth === today.getMonth() && d === today.getDate()) {
+          td.classList.add('today');
+        }
+
+        const sessions = scheduleData[dateKey];
+        if (sessions) {
+          const sel = document.createElement('div');
+          sel.className = 'selection';
+          sel.textContent = sessions.join('');
+          td.appendChild(sel);
+        }
+
+        td.addEventListener('click', () => openModal(dateKey));
+        row.appendChild(td);
+      }
+      body.appendChild(row);
+    }
+
+    function prevMonth() {
+      currentMonth--;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      renderCalendar();
+    }
+
+    function nextMonth() {
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      renderCalendar();
+    }
+
+    function openModal(dateKey) {
+      selectedDate = dateKey;
+      document.getElementById('modalDate').textContent = dateKey;
+      const cont = document.getElementById('sessionList');
+      cont.innerHTML = '';
+      const sessions = scheduleData[dateKey] || ["X", "X", "X", "X", "X", "X"];
+
+      sessions.forEach((val, i) => {
+        const row = document.createElement('div');
+        row.className = 'session-row';
+
+        const btn = document.createElement('button');
+        btn.textContent = val;
+        if (val === 'O') btn.classList.add('active');
+        btn.onclick = () => {
+          btn.textContent = (btn.textContent === 'O') ? 'X' : 'O';
+          btn.classList.toggle('active');
+        };
+
+        row.innerHTML = `<span>${i + 1}차시</span>`;
+        row.appendChild(btn);
+        cont.appendChild(row);
+      });
+
+      document.getElementById('overlay').style.display = 'block';
+      document.getElementById('sessionModal').style.display = 'block';
+    }
+
+    function saveSessions() {
+      const rows = document.querySelectorAll('.session-row');
+      const arr = [];
+      rows.forEach(r => arr.push(r.querySelector('button').textContent));
+      scheduleData[selectedDate] = arr;
+      const user = getCurrentUser();
+      localStorage.setItem(`schedule_${user.id}`, JSON.stringify(scheduleData));
+      closeModal();
+      renderCalendar();
+    }
+
+    function closeModal() {
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('sessionModal').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

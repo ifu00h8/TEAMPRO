@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>공지사항</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, textarea, select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 8px 15px;
+      margin-right: 5px;
+      background-color: #87CEFA;
+      border: none;
+      cursor: pointer;
+    }
+    .notice {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 15px;
+    }
+    .notice small {
+      display: block;
+      margin-bottom: 8px;
+      color: gray;
+    }
+    .filter-box {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body onload="loadNotices()">
+  <h2>📢 공지사항</h2>
+
+  <!-- 등록 폼 -->
+  <div id="noticeForm">
+    <input type="text" id="noticeTitle" placeholder="제목 입력" />
+    <textarea id="noticeContent" placeholder="내용 입력"></textarea>
+    <input type="password" id="noticePassword" placeholder="비밀번호 설정 (수정/삭제용)" />
+    <input type="file" id="noticeFile" />
+    <button onclick="addNotice()">공지 등록</button>
+  </div>
+
+  <!-- 검색 및 필터 -->
+  <div class="filter-box">
+    <input type="text" id="searchKeyword" placeholder="제목/내용 검색" oninput="loadNotices()" />
+    <input type="date" id="filterDate" onchange="loadNotices()" />
+    <button onclick="resetFilters()">필터 초기화</button>
+  </div>
+
+  <!-- 공지 리스트 -->
+  <h3>📜 등록된 공지사항</h3>
+  <div id="noticeList"></div>
+
+  <button onclick="location.href='home.html'">🏠 홈으로</button>
+
+  <script>
+    function getCurrentUser() {
+      return JSON.parse(localStorage.getItem('loggedInUser'));
+    }
+
+    function resetFilters() {
+      document.getElementById("searchKeyword").value = "";
+      document.getElementById("filterDate").value = "";
+      loadNotices();
+    }
+
+    function loadNotices() {
+      const user = getCurrentUser();
+      if (!user) {
+        alert("로그인이 필요합니다.");
+        location.href = "index.html";
+        return;
+      }
+
+      const keyword = document.getElementById("searchKeyword").value.trim().toLowerCase();
+      const dateFilter = document.getElementById("filterDate").value;
+      const list = document.getElementById("noticeList");
+      const notices = JSON.parse(localStorage.getItem("notices") || "[]");
+      list.innerHTML = "";
+
+      let filtered = notices;
+
+      if (keyword) {
+        filtered = filtered.filter(n =>
+          n.title.toLowerCase().includes(keyword) ||
+          n.content.toLowerCase().includes(keyword)
+        );
+      }
+
+      if (dateFilter) {
+        filtered = filtered.filter(n =>
+          n.date && n.date.startsWith(dateFilter)
+        );
+      }
+
+      if (filtered.length === 0) {
+        list.innerHTML = "<p>조건에 맞는 공지사항이 없습니다.</p>";
+        return;
+      }
+
+      filtered.slice().reverse().forEach((n, i) => {
+        const index = notices.indexOf(n); // 원본 인덱스
+        const el = document.createElement("div");
+        el.className = "notice";
+        el.innerHTML = `
+          <strong>${n.title}</strong>
+          <small>작성자: ${n.author} | 작성일: ${n.date}</small>
+          <p>${n.content}</p>
+          ${n.fileName ? `<p>첨부파일: <a href="${n.fileData}" download="${n.fileName}">${n.fileName}</a></p>` : ''}
+          <button onclick="editNotice(${index})">✏️ 수정</button>
+          <button onclick="deleteNotice(${index})">🗑️ 삭제</button>
+        `;
+        list.appendChild(el);
+      });
+    }
+
+    function addNotice() {
+      const user = getCurrentUser();
+      const title = document.getElementById("noticeTitle").value.trim();
+      const content = document.getElementById("noticeContent").value.trim();
+      const password = document.getElementById("noticePassword").value.trim();
+      const fileInput = document.getElementById("noticeFile");
+      const file = fileInput.files[0];
+
+      if (!title || !content || !password) {
+        alert("제목, 내용, 비밀번호를 모두 입력해주세요.");
+        return;
+      }
+
+      const notices = JSON.parse(localStorage.getItem("notices") || "[]");
+
+      const newNotice = {
+        title,
+        content,
+        date: new Date().toISOString().slice(0, 16).replace('T', ' '), // YYYY-MM-DD HH:mm
+        author: user.name,
+        password,
+      };
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          newNotice.fileName = file.name;
+          newNotice.fileData = e.target.result;
+
+          notices.push(newNotice);
+          localStorage.setItem("notices", JSON.stringify(notices));
+          clearForm();
+          loadNotices();
+        };
+        reader.readAsDataURL(file);
+      } else {
+        notices.push(newNotice);
+        localStorage.setItem("notices", JSON.stringify(notices));
+        clearForm();
+        loadNotices();
+      }
+    }
+
+    function clearForm() {
+      document.getElementById("noticeTitle").value = "";
+      document.getElementById("noticeContent").value = "";
+      document.getElementById("noticePassword").value = "";
+      document.getElementById("noticeFile").value = "";
+    }
+
+    function deleteNotice(index) {
+      const pw = prompt("비밀번호를 입력하세요 (삭제)");
+      const notices = JSON.parse(localStorage.getItem("notices") || "[]");
+
+      if (notices[index].password === pw) {
+        if (confirm("정말 삭제하시겠습니까?")) {
+          notices.splice(index, 1);
+          localStorage.setItem("notices", JSON.stringify(notices));
+          loadNotices();
+        }
+      } else {
+        alert("비밀번호가 일치하지 않습니다.");
+      }
+    }
+
+    function editNotice(index) {
+      const notices = JSON.parse(localStorage.getItem("notices") || "[]");
+      const pw = prompt("비밀번호를 입력하세요 (수정)");
+
+      if (notices[index].password !== pw) {
+        alert("비밀번호가 일치하지 않습니다.");
+        return;
+      }
+
+      const newTitle = prompt("새 제목을 입력하세요", notices[index].title);
+      const newContent = prompt("새 내용을 입력하세요", notices[index].content);
+
+      if (newTitle && newContent) {
+        notices[index].title = newTitle.trim();
+        notices[index].content = newContent.trim();
+        notices[index].date = new Date().toISOString().slice(0, 16).replace('T', ' ');
+        localStorage.setItem("notices", JSON.stringify(notices));
+        loadNotices();
+      }
+    }
+  </script>
+</body>
+</html>
